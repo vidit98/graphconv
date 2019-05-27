@@ -31,6 +31,7 @@ class GCU(Module):
 
 		self.Adj = torch.FloatTensor(V,V)
 		self.Z = torch.FloatTensor(d,V)
+		self.Z_o = None
 		self.Q = torch.FloatTensor(h*w,V)
 		self.count = 0
 		
@@ -108,7 +109,7 @@ class GCU(Module):
 				z = torch.ones(z.shape)
 			else:
 				z = z/n
-
+			#print(self.Z[:,i].shape, self.Z.shape, self.ht, self.wdth, self.d)
 			self.Z[:,i] = z
 
 		norm = self.Z**2
@@ -123,7 +124,7 @@ class GCU(Module):
 		print("the adjacency matrix A Done")
 
 	def GraphReproject(self):
-		X_new = torch.mm(self.Q, self.Z)
+		X_new = torch.mm(self.Q, self.Z_o)
 		return torch.reshape(X_new, (self.ht, self.wdth, self.outfeatures))
 
 	def forward(self, X):
@@ -131,24 +132,22 @@ class GCU(Module):
 			self.init_param()
 			self.count += 1
 		self.X = torch.reshape(X,(self.ht, self.wdth, self.d)).float()
-		# print("Printing X", self.X)
+		print("Printing X", self.X.shape)
+		print("Prinitng Z", self.Z.shape)
 		self.GraphProject()
 		# print("Prinitng Z\n",self.Z)
 
 		out = torch.mm(torch.t(self.Z), self.weight)
 		out = torch.spmm(self.Adj, out)
-		self.Z = F.relu(out)
+		self.Z_o = F.relu(out)
 
 		out = self.GraphReproject()
 		out = out.view(1, self.outfeatures, self.ht, self.wdth) #usample requires 4Dtensor
+		print("Prinitng Z", self.Z.shape)
 		
 		return out
 
 
-	def __repr__(self):
-		return self.__class__.__name__ + ' (' \
-			+ str(self.no_of_vert) + ' -> ' \
-				+ str(self.outfeatures) + ')'
 
 
 

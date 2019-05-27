@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torchvision
 import numpy as np
-from Graphlayer import GraphConvolution
 import torch.nn.functional as F
 from lib.nn import SynchronizedBatchNorm2d
 import resnet
@@ -36,7 +35,6 @@ class SegmentationModule(SegmentationModuleBase):
         # training
        
         
-    	print(type(feed_dict))
         
     	enc_out = self.encoder(feed_dict['img_data'])
     	print(enc_out.shape)

@@ -13,7 +13,7 @@ from dataset import TrainDataset
 from model import ModelBuilder, SegmentationModule
 from utils import AverageMeter, parse_devices
 from lib.nn import UserScatteredDataParallel, user_scattered_collate, patch_replication_callback
-import lib.utils.data as torchdata
+import torch.utils.data as torchdata
 from graphModule import GraphConv
 import graphLayer
 
@@ -36,7 +36,7 @@ def train(segmentation_module, iterator, optimizers, history, epoch, args):
         segmentation_module.zero_grad()
 
         # forward pass
-        print("sdvsbnnn",batch_data)
+        
         loss, acc = segmentation_module(batch_data[0])
         loss = loss.mean()
         acc = acc.mean()
@@ -57,11 +57,11 @@ def train(segmentation_module, iterator, optimizers, history, epoch, args):
         # calculate accuracy, and display
         if i % args.disp_iter == 0:
             print('Epoch: [{}][{}/{}], Time: {:.2f}, Data: {:.2f}, '
-                  'lr_encoder: {:.6f}, lr_decoder: {:.6f}, '
+                  'lr_encoder: {:.6f}, '
                   'Accuracy: {:4.2f}, Loss: {:.6f}'
                   .format(epoch, i, args.epoch_iters,
                           batch_time.average(), data_time.average(),
-                          args.running_lr_encoder, args.running_lr_decoder,
+                          args.running_lr_encoder,
                           ave_acc.average(), ave_total_loss.average()))
 
             fractional_epoch = epoch - 1 + 1. * i / args.epoch_iters
@@ -161,14 +161,12 @@ def create_optimizers(nets, args):
 def adjust_learning_rate(optimizers, cur_iter, args):
     scale_running_lr = ((1. - float(cur_iter) / args.max_iters) ** args.lr_pow)
     args.running_lr_encoder = args.lr_encoder * scale_running_lr
-    args.running_lr_decoder = args.lr_decoder * scale_running_lr
+    #args.running_lr_decoder = args.lr_decoder * scale_running_lr
 
     (optimizer_encoder, optimizer_decoder) = optimizers
     for param_group in optimizer_encoder.param_groups:
         param_group['lr'] = args.running_lr_encoder
-    for param_group in optimizer_decoder.param_groups:
-        param_group['lr'] = args.running_lr_decoder
-
+    
 
 def main(args):
     # Network Builders
@@ -179,7 +177,7 @@ def main(args):
         weights="baseline-resnet50dilated-ppm_deepsup/encoder_epoch_20.pth")
     gcu =  GraphConv(X=enc_out)#, V=2), GCU(X=enc_out, V=4), GCU(X=enc_out, V=8),GCU(X=enc_out, V=32)]
 
-    segmentation_module = SegmentationModule(net_encoder, gcu, crit, tr=False)
+    segmentation_module = SegmentationModule(net_encoder, gcu, crit, tr=True)
 
     # Dataset and Loader
     dataset_train = TrainDataset(
@@ -277,7 +275,7 @@ if __name__ == '__main__':
                         help='number of classes')
     parser.add_argument('--workers', default=16, type=int,
                         help='number of data loading workers')
-    parser.add_argument('--imgSize', default=505,
+    parser.add_argument('--imgSize', default=512,
                         nargs='+', type=int,
                         help='input image size of short edge (int or list)')
     parser.add_argument('--imgMaxSize', default=1000, type=int,
