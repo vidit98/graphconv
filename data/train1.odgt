@@ -1,1 +1,1 @@
-{"dbInfo": {"frameID": -1, "vID": "ADE20k"}, "width": 640, "fpath_img": "ADEChallengeData2016/images/training/ADE_train_00009317.jpg", "ade_scene": "airport_terminal", "height": 420, "dbName": "ADE20k", "fpath_segm": "ADEChallengeData2016/annotations/training/ADE_train_00009317.png"}
+{"dbInfo": {"frameID": -1, "vID": "ADE20k"}, "width": 640, "fpath_img": "ADEChallengeData2016/images/training/ADE_train_00000001.jpg", "ade_scene": "airport_terminal", "height": 420, "dbName": "ADE20k", "fpath_segm": "ADEChallengeData2016/annotations/training/ADE_train_00000001.png"}

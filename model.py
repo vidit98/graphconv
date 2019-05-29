@@ -28,7 +28,7 @@ class SegmentationModule(SegmentationModuleBase):
         super(SegmentationModule, self).__init__()
         self.encoder = net_enc
         self.crit = crit
-        self.conv1 = torch.nn.Conv2d(256, 3, kernel_size=3, stride=1, padding=1)
+        self.conv1 = torch.nn.Conv2d(256,150 , kernel_size=3, stride=1, padding=1)
         self.tr= tr
         self.gcu = gcu
     def forward(self, feed_dict):
@@ -36,9 +36,9 @@ class SegmentationModule(SegmentationModuleBase):
        
         
         
-    	enc_out = self.encoder(feed_dict['img_data'])
-    	print(enc_out.shape)
-    	enc_out1 = self.gcu(enc_out)
+    	enc_out1 = self.encoder(feed_dict['img_data'])
+    	print(enc_out1.shape)
+    	enc_out1 = self.gcu(enc_out1)
     	
     	# for i in range(len(self.gcu)):
     	# 	# print("\t\t--------------------%d--------------", i)
@@ -50,7 +50,8 @@ class SegmentationModule(SegmentationModuleBase):
 
     	pred = enc_out1	
     	pred = up(enc_out1)
-    	# pred = gcu(enc_out)
+        #pred = conv1(pred);print(pred.shape, feed_dict['seg_label'].shape)
+    	pred = self.conv1(pred);print(pred.shape, torch.max(feed_dict['seg_label']));pred = nn.functional.log_softmax(pred, dim=1)
     	if self.tr:
     		loss = self.crit(pred, feed_dict['seg_label']) #NLLL Loss
 

@@ -143,6 +143,8 @@ class TrainDataset(BaseDataset):
             img = cv2.imread(image_path, cv2.IMREAD_COLOR)
             segm = cv2.imread(segm_path, cv2.IMREAD_GRAYSCALE)
 
+            # print(np.max(segm))
+
             assert(img.ndim == 3)
             assert(segm.ndim == 2)
             assert(img.shape[0] == segm.shape[0])
@@ -178,10 +180,11 @@ class TrainDataset(BaseDataset):
             # print("DONE", batch_segms[i][:segm.shape[0], :segm.shape[1]].shape, torch.from_numpy(segm.astype(np.int)).long().shape)
             batch_segms[i][:segm.shape[0], :segm.shape[1]] = torch.from_numpy(segm.astype(np.int)).long()
         # print("OUTSIDE FOR LOOP")
-        batch_segms = batch_segms - 1 # label from -1 to 149
+        batch_segms = batch_segms -1 # label from -1 to 149
         output = dict()
         output['img_data'] = batch_images
         output['seg_label'] = batch_segms
+        # print(batch_segms.shape)
         return output
 
     def __len__(self):
