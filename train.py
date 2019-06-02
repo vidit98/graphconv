@@ -18,7 +18,7 @@ from graphModule import GraphConv
 import graphLayer
 
 # train one epoch
-def train(segmentation_module, iterator, optimizers, history, epoch, args):
+def train(segmentation_module, iterator, optimizers, history, epoch, par, args):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     ave_total_loss = AverageMeter()
@@ -42,7 +42,15 @@ def train(segmentation_module, iterator, optimizers, history, epoch, args):
         acc = acc.mean()
 
         # Backward
+        loss.retain_grad()
         loss.backward()
+        
+        total_norm = 0
+        for p in par:
+            total_norm += torch.sum(torch.abs(p))
+            
+        total_norm = total_norm ** (1. / 2)
+
         for optimizer in optimizers:
             optimizer.step()
 
@@ -53,16 +61,17 @@ def train(segmentation_module, iterator, optimizers, history, epoch, args):
         # update average loss and acc
         ave_total_loss.update(loss.data.item())
         ave_acc.update(acc.data.item()*100)
+        
 
         # calculate accuracy, and display
         if i % args.disp_iter == 0:
             print('Epoch: [{}][{}/{}], Time: {:.2f}, Data: {:.2f}, '
                   'lr_encoder: {:.6f}, '
-                  'Accuracy: {:4.2f}, Loss: {:.6f}'
+                  'Accuracy: {:4.2f}, Loss: {:.6f}, Grads: {:.6f}'
                   .format(epoch, i, args.epoch_iters,
                           batch_time.average(), data_time.average(),
                           args.running_lr_encoder,
-                          ave_acc.average(), ave_total_loss.average()))
+                          ave_acc.average(), ave_total_loss.average(), total_norm))
 
             fractional_epoch = epoch - 1 + 1. * i / args.epoch_iters
             history['train']['epoch'].append(fractional_epoch)
@@ -111,7 +120,7 @@ def group_weight(module):
             if m.bias is not None:
                 group_no_decay.append(m.bias)
         elif isinstance(m, graphLayer.GCU):
-            print("qq",type(m.parameters()), m.parameters())
+            # print("qq",type(m.parameters()), m.parameters())
             for i in module.parameters():
                 group_no_decay.append(i)
             break
@@ -120,22 +129,26 @@ def group_weight(module):
             # group_no_decay.append(m.parameters())
 
     # assert len(list(module.parameters())) == len(group_decay) + len(group_no_decay)
+    param_m = group_decay + group_no_decay
+
     groups = [dict(params=group_decay), dict(params=group_no_decay, weight_decay=.0)]
     # print(groups)
-    return groups
+    return groups, param_m
 
 
 def create_optimizers(nets, args):
     (net_encoder, gcu, crit) = nets
+    grouped, par = group_weight(net_encoder)
     optimizer_encoder = torch.optim.SGD(
-        group_weight(net_encoder),
+        grouped,
         lr=args.lr_encoder,
         momentum=args.beta1,
         weight_decay=args.weight_decay)
 
-
+    grouped, par1 = group_weight(gcu)
+    par += par1
     gcu_optim0 = torch.optim.SGD(
-        group_weight(gcu),
+        grouped,
         lr=args.lr_encoder,
         momentum=args.beta1)
 
@@ -155,7 +168,7 @@ def create_optimizers(nets, args):
     #     momentum=args.beta1,
     #     weight_decay=args.weight_decay)
 
-    return (optimizer_encoder, gcu_optim0)
+    return (optimizer_encoder, gcu_optim0), par
 
 
 def adjust_learning_rate(optimizers, cur_iter, args):
@@ -175,7 +188,7 @@ def main(args):
     crit = nn.NLLLoss(ignore_index=-1)
     net_encoder = builder.build_encoder(
         weights="baseline-resnet50dilated-ppm_deepsup/encoder_epoch_20.pth")
-    gcu =  GraphConv(X=enc_out)#, V=2), GCU(X=enc_out, V=4), GCU(X=enc_out, V=8),GCU(X=enc_out, V=32)]
+    gcu =  GraphConv()#, V=2), GCU(X=enc_out, V=4), GCU(X=enc_out, V=8),GCU(X=enc_out, V=32)]
 
     segmentation_module = SegmentationModule(net_encoder, gcu, crit, tr=True)
 
@@ -209,13 +222,13 @@ def main(args):
     # Set up optimizers
     # print(gcu[0].parameters())
     nets = (net_encoder, gcu, crit)
-    optimizers = create_optimizers(nets, args)
+    optimizers, par = create_optimizers(nets, args)
 
     # Main loop
     history = {'train': {'epoch': [], 'loss': [], 'acc': []}}
 
     for epoch in range(args.start_epoch, args.num_epoch + 1):
-        train(segmentation_module, iterator_train, optimizers, history, epoch, args)
+        train(segmentation_module, iterator_train, optimizers, history, epoch, par, args)
 
         # checkpointing
         checkpoint(nets, history, args, epoch)
@@ -291,7 +304,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', default=304, type=int, help='manual seed')
     parser.add_argument('--ckpt', default='./ckpt',
                         help='folder to output checkpoints')
-    parser.add_argument('--disp_iter', type=int, default=20,
+    parser.add_argument('--disp_iter', type=int, default=2,
                         help='frequency to display')
 
     args = parser.parse_args()

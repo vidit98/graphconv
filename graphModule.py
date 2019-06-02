@@ -4,10 +4,10 @@ import torch
 
 
 class GraphConv(nn.Module):
-    def __init__(self, X,outfeatures=256):
+    def __init__(self, outfeatures=256):
         super(GraphConv, self).__init__()
 
-        self.gc1 = GCU(X, V=2)
+        self.gc1 = GCU(V=2)
         # self.gc2 = GCU(X, V=4)
         # self.gc3 = GCU(X, V=8)
         # self.gc4 = GCU(X, V=32)

@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from lib.nn import SynchronizedBatchNorm2d
 import resnet
 from graphModule import GCU
-
+from torchviz import make_dot
 
 
 class SegmentationModuleBase(nn.Module):
@@ -36,30 +36,24 @@ class SegmentationModule(SegmentationModuleBase):
        
         
         
-    	enc_out1 = self.encoder(feed_dict['img_data'])
-    	print(enc_out1.shape)
-    	enc_out1 = self.gcu(enc_out1)
-    	
-    	# for i in range(len(self.gcu)):
-    	# 	# print("\t\t--------------------%d--------------", i)
-    	# 	a = self.gcu[i](enc_out)
-    	# 	# print(a.shape, enc_out1.shape)
-    	# 	enc_out1 = torch.cat((enc_out1,a),dim=1)
+        enc_out1 = self.encoder(feed_dict['img_data'])
+        print(enc_out1.shape)
+        enc_out1 = self.gcu(enc_out1)
+        
+        up = nn.Upsample(scale_factor=8) 
 
-    	up = nn.Upsample(scale_factor=8) 
+        pred = enc_out1	
+        pred = up(enc_out1)
+        pred = self.conv1(pred);print(pred.shape, torch.max(feed_dict['seg_label']));pred = nn.functional.log_softmax(pred, dim=1)
 
-    	pred = enc_out1	
-    	pred = up(enc_out1)
-        #pred = conv1(pred);print(pred.shape, feed_dict['seg_label'].shape)
-    	pred = self.conv1(pred);print(pred.shape, torch.max(feed_dict['seg_label']));pred = nn.functional.log_softmax(pred, dim=1)
-    	if self.tr:
-    		loss = self.crit(pred, feed_dict['seg_label']) #NLLL Loss
+        if self.tr:
+            loss = self.crit(pred, feed_dict['seg_label']) #NLLL Loss
 
-    		acc = self.pixel_acc(pred, feed_dict['seg_label'])
-    		return loss,acc
+            acc = self.pixel_acc(pred, feed_dict['seg_label'])
+            return loss,acc
         # # inference
-    	else:
-    		return pred
+        else:
+            return pred
 
 
 def conv3x3(in_planes, out_planes, stride=1, has_bias=False):

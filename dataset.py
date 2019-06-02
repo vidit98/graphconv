@@ -1,7 +1,7 @@
 import os
 import json
 import torch
-import torch.utils.data as torchdata
+import lib.utils.data as torchdata
 import cv2
 from torchvision import transforms
 import numpy as np

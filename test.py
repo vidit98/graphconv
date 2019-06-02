@@ -82,7 +82,7 @@ def main(args):
     enc_out = torch.randn(([1,2048,64,64]))
     net_encoder = builder.build_encoder(
         weights="baseline-resnet50dilated-ppm_deepsup/encoder_epoch_20.pth")
-    gcu = GraphConv(X=enc_out)#, V=2), GCU(X=enc_out, V=4), GCU(X=enc_out, V=8),GCU(X=enc_out, V=32)]
+    gcu = GraphConv()#, V=2), GCU(X=enc_out, V=4), GCU(X=enc_out, V=8),GCU(X=enc_out, V=32)]
 
     crit = nn.NLLLoss(ignore_index=-1)
 
