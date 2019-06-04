@@ -186,6 +186,7 @@ def main(args):
     builder = ModelBuilder()
     enc_out = torch.randn(([1,2048,64,64]))
     crit = nn.NLLLoss(ignore_index=-1)
+    crit = crit.cuda()
     net_encoder = builder.build_encoder(
         weights="baseline-resnet50dilated-ppm_deepsup/encoder_epoch_20.pth")
     gcu =  GraphConv()#, V=2), GCU(X=enc_out, V=4), GCU(X=enc_out, V=8),GCU(X=enc_out, V=32)]
@@ -217,7 +218,7 @@ def main(args):
     #         device_ids=args.gpus)
     #     # For sync bn
     #     patch_replication_callback(segmentation_module)
-    # segmentation_module.cuda()
+    segmentation_module.cuda()
 
     # Set up optimizers
     # print(gcu[0].parameters())
@@ -262,7 +263,7 @@ if __name__ == '__main__':
                         default='./data/')
 
     # optimization related arguments
-    parser.add_argument('--gpus', default='0',
+    parser.add_argument('--gpus', default='1',
                         help='gpus to use, e.g. 0-3 or 0,1,2,3')
     parser.add_argument('--batch_size_per_gpu', default=1, type=int,
                         help='input batch size')
@@ -270,7 +271,7 @@ if __name__ == '__main__':
                         help='epochs to train for')
     parser.add_argument('--start_epoch', default=1, type=int,
                         help='epoch to start training. useful if continue from a checkpoint')
-    parser.add_argument('--epoch_iters', default=5000, type=int,
+    parser.add_argument('--epoch_iters', default=500, type=int,
                         help='iterations of each epoch (irrelevant to batch size)')
     parser.add_argument('--optim', default='SGD', help='optimizer')
     parser.add_argument('--lr_encoder', default=1e-2, type=float, help='LR')

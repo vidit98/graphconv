@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from lib.nn import SynchronizedBatchNorm2d
 import resnet
 from graphModule import GCU
-from torchviz import make_dot
+
 
 
 class SegmentationModuleBase(nn.Module):
@@ -28,7 +28,7 @@ class SegmentationModule(SegmentationModuleBase):
         super(SegmentationModule, self).__init__()
         self.encoder = net_enc
         self.crit = crit
-        self.conv1 = torch.nn.Conv2d(256,150 , kernel_size=3, stride=1, padding=1)
+        self.conv1 = torch.nn.Conv2d(2560,150 , kernel_size=3, stride=1, padding=1)
         self.tr= tr
         self.gcu = gcu
     def forward(self, feed_dict):
@@ -36,7 +36,7 @@ class SegmentationModule(SegmentationModuleBase):
        
         
         
-        enc_out1 = self.encoder(feed_dict['img_data'])
+        enc_out1 = self.encoder(feed_dict['img_data'].cuda())
         print(enc_out1.shape)
         enc_out1 = self.gcu(enc_out1)
         
@@ -47,9 +47,9 @@ class SegmentationModule(SegmentationModuleBase):
         pred = self.conv1(pred);print(pred.shape, torch.max(feed_dict['seg_label']));pred = nn.functional.log_softmax(pred, dim=1)
 
         if self.tr:
-            loss = self.crit(pred, feed_dict['seg_label']) #NLLL Loss
+            loss = self.crit(pred, feed_dict['seg_label'].cuda()) #NLLL Loss
 
-            acc = self.pixel_acc(pred, feed_dict['seg_label'])
+            acc = self.pixel_acc(pred, feed_dict['seg_label'].cuda())
             return loss,acc
         # # inference
         else:

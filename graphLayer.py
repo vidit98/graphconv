@@ -22,13 +22,13 @@ class GCU(Module):
 		self.no_of_vert = V
 		self.outfeatures = outfeatures
 
-		self.W = Parameter(torch.randn(d,V))
+		self.W = Parameter(torch.cuda.FloatTensor(d,V))
 		self.W.requires_grad = True
 		self.W.retain_grad()
-		self.variance = Parameter(torch.randn(d,V))
+		self.variance = Parameter(torch.cuda.FloatTensor(d,V))
 		self.variance.requires_grad = True
 		self.variance.retain_grad()
-		self.weight = Parameter(torch.FloatTensor(d, outfeatures))
+		self.weight = Parameter(torch.cuda.FloatTensor(d, outfeatures))
 		self.weight.requires_grad = True
 		torch.nn.init.xavier_uniform(self.weight)
 		torch.nn.init.xavier_uniform(self.W)
@@ -70,10 +70,10 @@ class GCU(Module):
 
 	def GraphProject(self,X):
 
-		Adj = torch.FloatTensor(self.no_of_vert,self.no_of_vert)
-		Z = torch.FloatTensor(self.d,self.no_of_vert)
+		Adj = torch.cuda.FloatTensor(self.no_of_vert,self.no_of_vert)
+		Z = torch.cuda.FloatTensor(self.d,self.no_of_vert)
 		
-		Q = torch.FloatTensor(self.ht*self.wdth,self.no_of_vert)
+		Q = torch.cuda.FloatTensor(self.ht*self.wdth,self.no_of_vert)
 
 		for i in range(self.no_of_vert):
 			q1 = self.W[:,i]
@@ -115,7 +115,7 @@ class GCU(Module):
 			z = torch.sum(z,dim=0)
 
 			n = torch.sum(Q[:,i],dim=0)
-			if torch.equal(z,torch.zeros(z.shape)) and torch.equal(n,torch.zeros(n.shape)):
+			if torch.equal(z,torch.cuda.FloatTensor(z.shape).fill_(0)) and torch.equal(n,torch.cuda.FloatTensor(n.shape).fill_(0)):
 				z = torch.ones(z.shape)
 			else:
 				z = z/n
@@ -128,9 +128,9 @@ class GCU(Module):
 		# print("Z \n",self.Z)
 		Z = torch.div(Z,norm)
 
-		print("the vertex features Z Done")
+		#print("the vertex features Z Done")
 		Adj = torch.mm(torch.t(Z), Z)
-		print("the adjacency matrix A Done")
+		#print("the adjacency matrix A Done")
 
 		return (Q, Z, Adj)
 
@@ -156,7 +156,7 @@ class GCU(Module):
 
 		out = self.GraphReproject(Q, Z_o)
 		out = out.view(1, self.outfeatures, self.ht, self.wdth) #usample requires 4Dtensor
-		print("Prinitng Z", Z.shape)
+		#print("Prinitng Z", Z.shape)
 		
 		return out
 
