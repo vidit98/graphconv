@@ -184,7 +184,7 @@ class TrainDataset(BaseDataset):
         output = dict()
         output['img_data'] = batch_images
         output['seg_label'] = batch_segms
-        # print(batch_segms.shape)
+        #print("returning output", type(output), len(output['img_data']))
         return output
 
     def __len__(self):

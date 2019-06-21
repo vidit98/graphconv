@@ -13,12 +13,14 @@ from dataset import TrainDataset
 from model import ModelBuilder, SegmentationModule
 from utils import AverageMeter, parse_devices
 from lib.nn import UserScatteredDataParallel, user_scattered_collate, patch_replication_callback
-import torch.utils.data as torchdata
+import lib.utils.data as torchdata
 from graphModule import GraphConv
 import graphLayer
-
+import visdom
+import numpy as np
+#torch.backends.cudnn.benchmark = False
 # train one epoch
-def train(segmentation_module, iterator, optimizers, history, epoch, par, args):
+def train(segmentation_module, iterator, optimizers, history, epoch, par, vis,win, sargs):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     ave_total_loss = AverageMeter()
@@ -36,6 +38,7 @@ def train(segmentation_module, iterator, optimizers, history, epoch, par, args):
         segmentation_module.zero_grad()
 
         # forward pass
+       # print(type(batch_data[0]), len(batch_data[0]))
         
         loss, acc = segmentation_module(batch_data[0])
         loss = loss.mean()
@@ -46,10 +49,15 @@ def train(segmentation_module, iterator, optimizers, history, epoch, par, args):
         loss.backward()
         
         total_norm = 0
+        total_norm1 = 0
         for p in par:
-            total_norm += torch.sum(torch.abs(p))
+            if p.get_device() == 0:
+                total_norm += torch.sum(torch.abs(p))
+            elif p.get_device() == 1:
+                total_norm1 += torch.sum(torch.abs(p))
             
         total_norm = total_norm ** (1. / 2)
+        total_norm1 = total_norm1 **(1./2)
 
         for optimizer in optimizers:
             optimizer.step()
@@ -62,16 +70,19 @@ def train(segmentation_module, iterator, optimizers, history, epoch, par, args):
         ave_total_loss.update(loss.data.item())
         ave_acc.update(acc.data.item()*100)
         
+        if i%10 == 0:
+            vis.line(Y=np.array([ave_total_loss.avg]), X=np.array([1000*(epoch-1)+i])
+            , win=win,update="append")
 
         # calculate accuracy, and display
         if i % args.disp_iter == 0:
             print('Epoch: [{}][{}/{}], Time: {:.2f}, Data: {:.2f}, '
                   'lr_encoder: {:.6f}, '
-                  'Accuracy: {:4.2f}, Loss: {:.6f}, Grads: {:.6f}'
+                  'Accuracy: {:4.2f}, Loss: {:.6f}, Grads0: {:.2f}, Grads1: {:.2f}'
                   .format(epoch, i, args.epoch_iters,
                           batch_time.average(), data_time.average(),
                           args.running_lr_encoder,
-                          ave_acc.average(), ave_total_loss.average(), total_norm))
+                          ave_acc.average(), ave_total_loss.average(), total_norm, total_norm1))
 
             fractional_epoch = epoch - 1 + 1. * i / args.epoch_iters
             history['train']['epoch'].append(fractional_epoch)
@@ -81,19 +92,19 @@ def train(segmentation_module, iterator, optimizers, history, epoch, par, args):
         # adjust learning rate
         cur_iter = i + (epoch - 1) * args.epoch_iters
         adjust_learning_rate(optimizers, cur_iter, args)
+    return ave_total_loss
 
 
 def checkpoint(nets, history, args, epoch_num):
     print('Saving checkpoints...')
     (net_encoder, net_decoder, crit) = nets
     suffix_latest = 'epoch_{}.pth'.format(epoch_num)
-
+    
     dict_encoder = net_encoder.state_dict()
     dict_decoder = net_decoder.state_dict()
 
     # dict_encoder_save = {k: v for k, v in dict_encoder.items() if not (k.endswith('_tmp_running_mean') or k.endswith('tmp_running_var'))}
     # dict_decoder_save = {k: v for k, v in dict_decoder.items() if not (k.endswith('_tmp_running_mean') or k.endswith('tmp_running_var'))}
-
     torch.save(history,
                '{}/history_{}'.format(args.ckpt, suffix_latest))
     torch.save(dict_encoder,
@@ -184,13 +195,13 @@ def adjust_learning_rate(optimizers, cur_iter, args):
 def main(args):
     # Network Builders
     builder = ModelBuilder()
-    enc_out = torch.randn(([1,2048,64,64]))
+   
     crit = nn.NLLLoss(ignore_index=-1)
     crit = crit.cuda()
     net_encoder = builder.build_encoder(
         weights="baseline-resnet50dilated-ppm_deepsup/encoder_epoch_20.pth")
-    gcu =  GraphConv()#, V=2), GCU(X=enc_out, V=4), GCU(X=enc_out, V=8),GCU(X=enc_out, V=32)]
-
+    gcu =  GraphConv(batch=args.batch_size_per_gpu)#, V=2), GCU(X=enc_out, V=4), GCU(X=enc_out, V=8),GCU(X=enc_out, V=32)]
+   # gcu.load_state_dict(torch.load("ckpt/baseline-resnet50dilated-ngpus1-batchSize1-imgMaxSize1000-paddingConst8-segmDownsampleRate8-epoch20/decoder_epoch_20.pth"))
     segmentation_module = SegmentationModule(net_encoder, gcu, crit, tr=True)
 
     # Dataset and Loader
@@ -212,13 +223,13 @@ def main(args):
     iterator_train = iter(loader_train)
 
     # load nets into gpu
-    # if len(args.gpus) > 1:
-    #     segmentation_module = UserScatteredDataParallel(
-    #         segmentation_module,
-    #         device_ids=args.gpus)
-    #     # For sync bn
-    #     patch_replication_callback(segmentation_module)
-    segmentation_module.cuda()
+    if len(args.gpus) > 4:
+        segmentation_module = UserScatteredDataParallel(
+            segmentation_module,
+            device_ids=args.gpus)
+         # For sync bn
+        patch_replication_callback(segmentation_module)
+   # segmentation_module.cuda()
 
     # Set up optimizers
     # print(gcu[0].parameters())
@@ -227,10 +238,15 @@ def main(args):
 
     # Main loop
     history = {'train': {'epoch': [], 'loss': [], 'acc': []}}
-
+    vis = visdom.Visdom()
+    win = vis.line(np.array([5.7]),opts=dict(xlabel='epochs',
+                                     ylabel='Loss',
+                                     title='Training Loss V=16',
+                                     legend=['Loss']))
+    
     for epoch in range(args.start_epoch, args.num_epoch + 1):
-        train(segmentation_module, iterator_train, optimizers, history, epoch, par, args)
-
+        lss = train(segmentation_module, iterator_train, optimizers, history, epoch, par,vis,win, args)
+        
         # checkpointing
         checkpoint(nets, history, args, epoch)
 
@@ -256,7 +272,7 @@ if __name__ == '__main__':
 
     # Path related arguments
     parser.add_argument('--list_train',
-                        default='./data/train1.odgt')
+                        default='./data/train.odgt')
     parser.add_argument('--list_val',
                         default='./data/validation.odgt')
     parser.add_argument('--root_dataset',
@@ -267,11 +283,11 @@ if __name__ == '__main__':
                         help='gpus to use, e.g. 0-3 or 0,1,2,3')
     parser.add_argument('--batch_size_per_gpu', default=1, type=int,
                         help='input batch size')
-    parser.add_argument('--num_epoch', default=20, type=int,
+    parser.add_argument('--num_epoch', default=120, type=int,
                         help='epochs to train for')
     parser.add_argument('--start_epoch', default=1, type=int,
                         help='epoch to start training. useful if continue from a checkpoint')
-    parser.add_argument('--epoch_iters', default=500, type=int,
+    parser.add_argument('--epoch_iters', default=1000, type=int,
                         help='iterations of each epoch (irrelevant to batch size)')
     parser.add_argument('--optim', default='SGD', help='optimizer')
     parser.add_argument('--lr_encoder', default=1e-2, type=float, help='LR')
@@ -305,7 +321,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', default=304, type=int, help='manual seed')
     parser.add_argument('--ckpt', default='./ckpt',
                         help='folder to output checkpoints')
-    parser.add_argument('--disp_iter', type=int, default=2,
+    parser.add_argument('--disp_iter', type=int, default=5,
                         help='frequency to display')
 
     args = parser.parse_args()
@@ -318,6 +334,7 @@ if __name__ == '__main__':
     all_gpus = [x.replace('gpu', '') for x in all_gpus]
     args.gpus = [int(x) for x in all_gpus]
     num_gpus = len(args.gpus)
+    print("NUM OF GPUS:", num_gpus)
     args.batch_size = num_gpus * args.batch_size_per_gpu
 
     args.max_iters = args.epoch_iters * args.num_epoch

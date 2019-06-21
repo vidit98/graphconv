@@ -28,28 +28,31 @@ class SegmentationModule(SegmentationModuleBase):
         super(SegmentationModule, self).__init__()
         self.encoder = net_enc
         self.crit = crit
-        self.conv1 = torch.nn.Conv2d(2560,150 , kernel_size=3, stride=1, padding=1)
+        self.conv1 = torch.nn.Conv2d(2304,150 , kernel_size=3, stride=1, padding=1).cuda(1)
         self.tr= tr
         self.gcu = gcu
+        self.gcu.cuda(1)
+        self.encoder.cuda(0)
+
     def forward(self, feed_dict):
         # training
        
         
-        
-        enc_out1 = self.encoder(feed_dict['img_data'].cuda())
-        print(enc_out1.shape)
-        enc_out1 = self.gcu(enc_out1)
+        #feed_dict = feed_dict[0]
+        enc_out1 = self.encoder(feed_dict['img_data'].cuda(0))
+     #   print(enc_out1.shape)
+        enc_out2 = enc_out1.cuda(1)
+        enc_out1 = self.gcu(enc_out2)
         
         up = nn.Upsample(scale_factor=8) 
 
-        pred = enc_out1	
         pred = up(enc_out1)
-        pred = self.conv1(pred);print(pred.shape, torch.max(feed_dict['seg_label']));pred = nn.functional.log_softmax(pred, dim=1)
+        pred = self.conv1(pred);pred = nn.functional.log_softmax(pred, dim=1)
 
         if self.tr:
-            loss = self.crit(pred, feed_dict['seg_label'].cuda()) #NLLL Loss
+            loss = self.crit(pred, feed_dict['seg_label'].cuda(1)) #NLLL Loss
 
-            acc = self.pixel_acc(pred, feed_dict['seg_label'].cuda())
+            acc = self.pixel_acc(pred, feed_dict['seg_label'].cuda(1))
             return loss,acc
         # # inference
         else:

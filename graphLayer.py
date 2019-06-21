@@ -8,11 +8,11 @@ from torch.nn.modules.module import Module
 
 #TODO
 """
-Currently only for 1 iamge write a code to generalize for a batch
+Curre
 """
 
 class GCU(Module):
-	def __init__(self, h=64, w=64, d=2048, V=32,outfeatures=256):
+	def __init__(self, batch = 16, h=64, w=64, d=2048, V=32,outfeatures=256):
 		super(GCU, self).__init__()
 		
 		
@@ -21,7 +21,7 @@ class GCU(Module):
 		self.d = d
 		self.no_of_vert = V
 		self.outfeatures = outfeatures
-
+		self.batch = batch
 		self.W = Parameter(torch.cuda.FloatTensor(d,V))
 		self.W.requires_grad = True
 		self.W.retain_grad()
@@ -34,6 +34,13 @@ class GCU(Module):
 		torch.nn.init.xavier_uniform(self.W)
 		torch.nn.init.xavier_uniform(self.variance)
 
+
+		self.iden = torch.eye(self.d).cuda(1)
+		self.iden = torch.cat((self.iden, self.iden))
+		for i in range(int(np.log2(V))):
+			self.iden = torch.cat((self.iden,self.iden), dim=1)
+
+		
 		
 		self.count = 0
 		
@@ -70,76 +77,134 @@ class GCU(Module):
 
 	def GraphProject(self,X):
 
-		Adj = torch.cuda.FloatTensor(self.no_of_vert,self.no_of_vert)
-		Z = torch.cuda.FloatTensor(self.d,self.no_of_vert)
-		
-		Q = torch.cuda.FloatTensor(self.ht*self.wdth,self.no_of_vert)
+		Adj = torch.cuda.FloatTensor(self.batch, self.no_of_vert,self.no_of_vert)
+		Adj = Adj.cuda(1)
+		Z = torch.cuda.FloatTensor(self.batch,self.d,self.no_of_vert)
+		Z = Z.cuda(1)
+		Q = torch.cuda.FloatTensor(self.batch, self.ht*self.wdth,self.no_of_vert)
 
+		Q = Q.cuda(1)
+		#print("Hello",Z.get_device(), Q.get_device())
 		for i in range(self.no_of_vert):
 			q1 = self.W[:,i]
 			# print(q1)
-			q = X - q1[None,None,:]
+			q = X - q1[None,None,None,:]
 			# print("after subracting", q)
 			# print("variance", self.variance[:,i])
 			q = q/self.variance[:,i]
 			
-			q = torch.reshape(q,(self.ht*self.wdth, self.d))
+			q = torch.reshape(q,(self.batch, self.ht*self.wdth, self.d))
 
 			q = q**2
 			# print("after dividing", q)
-			q = torch.sum(q, dim=1)
+			q = torch.sum(q, dim=2)
 			# print("Prinitng\n", q)
 			# q = torch.exp(-q*0.5)
-			Q[:,i] = q
+			Q[:,:,i] = q
 			# print("Prinitng q\n", self.Q[:,i])
 		# print(torch.max(self.Q, 1)[0])
-		Q -= torch.min(Q, 1)[0][:,None]
+		Q -= torch.min(Q, 2)[0][:,:,None]
 		Q = torch.exp(-Q*0.5)
-		norm = torch.sum(Q, dim=1)
+		norm = torch.sum(Q, dim=2)
 		# print(norm.shape)
-		Q = torch.div(Q,norm[:,None])
+		Q = torch.div(Q,norm[:,:,None])
 
 		# print("Printing Q\n",self.Q)
 
 		
 
-		print("the pixel-to-vertex assignment matrix Done")
+		#print("the pixel-to-vertex assignment matrix Done")
 		for i in range(self.no_of_vert):
 			z1 = self.W[:,i]
-			q = X - z1[None,None,:]
+			q = X - z1[None,None,None,:]
 			z = q/self.variance[:,i]
-			z = torch.reshape(z,(self.ht*self.wdth, self.d))
+			z = torch.reshape(z,(self.batch, self.ht*self.wdth, self.d))
 			
-			z = torch.mul(z,Q[:,i][:,None])
+			z = torch.mul(z,Q[:,:,i][:,:,None])
 
-			z = torch.sum(z,dim=0)
+			z = torch.sum(z,dim=1)
 
-			n = torch.sum(Q[:,i],dim=0)
-			if torch.equal(z,torch.cuda.FloatTensor(z.shape).fill_(0)) and torch.equal(n,torch.cuda.FloatTensor(n.shape).fill_(0)):
+			n = torch.sum(Q[:,:,i],dim=1)
+			#print(z.shape, n.shape)
+			if torch.equal(z,torch.cuda.FloatTensor(z.shape).fill_(0).cuda(1)) and torch.equal(n,torch.cuda.FloatTensor(n.shape).fill_(0).cuda(1)):
 				z = torch.ones(z.shape)
 			else:
-				z = z/n
-			Z[:,i] = z
+				z = z/n[:,None]
+			Z[:,:,i] = z
 
 		norm = Z**2
 
-		norm = torch.sum(norm, dim=0)
+		norm = torch.sum(norm, dim=1)
+		# print("norm size",norm.shape)
+		# print("Z \n",self.Z)
+		Z = torch.div(Z,norm[:,None])
+
+		#print("the vertex features Z Done", torch.transpose(Z,1,2).shape, Z.shape)
+		#torch.cuda.synchronize()
+		Adj = torch.matmul(torch.transpose(Z,1,2), Z)
+		#print("the adjacency matrix A Done")
+
+		return (Q, Z, Adj)
+
+	def GraphProject_optim(self, X):
+
+		Adj = torch.cuda.FloatTensor(self.batch, self.no_of_vert,self.no_of_vert)
+		Adj = Adj.cuda(1)
+		Z = torch.cuda.FloatTensor(self.batch,self.d,self.no_of_vert)
+		Z = Z.cuda(1)
+		Q = torch.cuda.FloatTensor(self.batch, self.ht*self.wdth,self.no_of_vert)
+
+		Q = Q.cuda(1)
+		X = torch.reshape(X,(self.batch, self.ht*self.wdth, self.d))
+		zero = torch.cuda.FloatTensor(X.shape).fill_(0).cuda(1) 
+		new = torch.cat((zero, X), dim=2)
+		#print("Shapes", new.shape, zero.shape, X.shape)
+		extend = torch.matmul(new, self.iden)
+		#print(extend.shape)
+
+		W = torch.reshape(self.W, (self.d*self.no_of_vert,))
+		q = extend - W[None,None,:]
+		variance = torch.reshape(self.variance, (self.d*self.no_of_vert,))
+		q1 = q/variance[None, None, :]
+		q = q1**2
+		q = torch.reshape(q, (self.batch, self.ht*self.wdth, self.d , self.no_of_vert))
+		q = torch.sum(q, dim=2)
+		q = torch.reshape(q, (self.batch, self.ht*self.wdth, self.no_of_vert))
+		Q = q
+
+		Q -= torch.min(Q, 2)[0][:,:,None]
+		Q = torch.exp(-Q*0.5)
+		norm = torch.sum(Q, dim=2)
+		# print(norm.shape)
+		Q = torch.div(Q,norm[:,:,None])
+
+		#print(Q.shape)
+
+		z = torch.reshape(q1, (self.batch,  self.d , self.ht*self.wdth , self.no_of_vert))
+		z = torch.mul(z,Q)
+		z = torch.sum(z, dim=2)
+		#print("MIN",torch.min(torch.abs(z)), z.shape)
+		z = torch.add(z, 10e-8)/torch.add(torch.sum(Q,dim=1), 10e-8)
+
+		norm = z**2
+		norm = torch.sum(norm, dim=1)
 		# print("norm size",norm.shape)
 		# print("Z \n",self.Z)
 		Z = torch.div(Z,norm)
 
 		#print("the vertex features Z Done")
-		Adj = torch.mm(torch.t(Z), Z)
-		#print("the adjacency matrix A Done")
+		Adj = torch.matmul(torch.transpose(Z,1,2), Z)
 
 		return (Q, Z, Adj)
 
+
+
 	def GraphReproject(self, Z_o,Q):
-		X_new = torch.mm(Z_o,Q)
-		return torch.reshape(X_new, (self.ht, self.wdth, self.outfeatures))
+		X_new = torch.matmul(Z_o,Q)
+		return torch.reshape(X_new, (self.batch, self.outfeatures, self.ht, self.wdth))
 
 	def forward(self, X):
-		X = torch.reshape(X,(self.ht, self.wdth, self.d)).float()
+		X = torch.reshape(X,(self.batch, self.ht, self.wdth, self.d)).float()
 		# if self.count == 0:
 		# 	with torch.no_grad():
 		# 		self.W, self.variance = self.init_param(X)
@@ -147,15 +212,15 @@ class GCU(Module):
 		
 		
 		
-		Q, Z, Adj = self.GraphProject(X)
+		Q, Z, Adj = self.GraphProject_optim(X)
 		# print("Prinitng Z\n",self.Z)
-
-		out = torch.mm(torch.t(Z), self.weight)
-		out = torch.spmm(Adj, out)
+		#print("Hello1", self.weight.get_device())
+		out = torch.matmul(torch.transpose(Z,1,2), self.weight)
+		out = torch.matmul(Adj, out)
 		Z_o = F.relu(out)
 
 		out = self.GraphReproject(Q, Z_o)
-		out = out.view(1, self.outfeatures, self.ht, self.wdth) #usample requires 4Dtensor
+		#out = out.view(self.batch, self.outfeatures, self.ht, self.wdth) #usample requires 4Dtensor
 		#print("Prinitng Z", Z.shape)
 		
 		return out
