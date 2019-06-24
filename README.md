@@ -17,9 +17,9 @@ Semantic segmentation is the task of assigning each pixel a class. Many differen
 * Live Data Visualization: You can visualize the training curve live using visdom.
 * Flexible to remove and add GCU units.
 ## TO DO
--[] Give flexiblity to use number of GPUs or to run only on CPU, currently model uses 2 GPUs.
--[] Upload checkpoint files
--[] Optimize code
+- [ ] Give flexiblity to use number of GPUs or to run only on CPU, currently model uses 2 GPUs.
+- [ ] Upload checkpoint files
+- [ ] Optimize code
 
 ## Training
 
