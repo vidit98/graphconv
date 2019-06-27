@@ -23,7 +23,9 @@ Semantic segmentation is the task of assigning each pixel a class. Many differen
 
 ## Training
 To put the network to training use the command below. Hyperparameters can be changed by giving inputs via terminal. Please go through the file train.py for knowing about hyperparameters
-'python3 train.py'
+
+
+`python3 train.py`
 
 
 
