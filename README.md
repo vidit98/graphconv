@@ -1,6 +1,8 @@
 ## Introduction
 
-![Semantic Segmentation](https://github.com/vidit98/graphconv/blob/master/V16epoch120.png)
+![Semantic Segmentation](https://github.com/vidit98/graphconv/blob/master/ADE_train_00009317_seg.png)
+
+
 
 
 Semantic segmentation is the task of assigning each pixel a class. Many different methods are proposed for the same. This a pytorch implementation of [this](https://papers.nips.cc/paper/8135-beyond-grids-learning-graph-representations-for-visual-recognition.pdf) paper. To know in more detail about the implementation and method refer to my blog post(link to be added).
@@ -27,6 +29,8 @@ To put the network to training use the command below. Hyperparameters can be cha
 
 `python3 train.py`
 
+The network was trained on RTX 2080. It took around 12 hrs to train. Training loss plot is given below.
+![Training Loss](https://github.com/vidit98/graphconv/blob/master/V16epoch120.png)
 
 
 
