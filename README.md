@@ -1,6 +1,6 @@
 ## Introduction
 
-![Semantic Segmentation](https://ibb.co/8bmbmxM)
+![Semantic Segmentation](https://github.com/vidit98/graphconv/blob/master/V16epoch120.png)
 
 
 Semantic segmentation is the task of assigning each pixel a class. Many different methods are proposed for the same. This a pytorch implementation of [this](https://papers.nips.cc/paper/8135-beyond-grids-learning-graph-representations-for-visual-recognition.pdf) paper. To know in more detail about the implementation and method refer to my blog post(link to be added).
