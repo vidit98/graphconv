@@ -5,7 +5,7 @@
 
 
 
-Semantic segmentation is the task of assigning each pixel a class. Many different methods are proposed for the same. This a pytorch implementation of [this](https://papers.nips.cc/paper/8135-beyond-grids-learning-graph-representations-for-visual-recognition.pdf) paper. To know in more detail about the implementation and method refer to my blog post(link to be added).
+Semantic segmentation is the task of assigning each pixel a class. Many different methods are proposed for the same. This a pytorch implementation of [this](https://papers.nips.cc/paper/8135-beyond-grids-learning-graph-representations-for-visual-recognition.pdf) paper. To know in more detail about the implementation and method refer to [my blog post](https://towardsdatascience.com/visual-recognition-using-graphs-9c446005736e).
 
 ## Requirements
 * pytorch 1.1
