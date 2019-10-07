@@ -24,6 +24,9 @@ Semantic segmentation is the task of assigning each pixel a class. Many differen
 - [ ] Optimize code
 
 ## Training
+Download data set from [here](https://groups.csail.mit.edu/vision/datasets/ADE20K/). Place all the training images in `data/ADEChallengeData2016/images/training` and ground truth of segmentation in `data/ADEChallengeData2016/annotations/training`.
+
+
 To put the network to training use the command below. Hyperparameters can be changed by giving inputs via terminal. Please go through the file train.py for knowing about hyperparameters
 
 
